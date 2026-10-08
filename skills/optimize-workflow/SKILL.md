@@ -17,9 +17,11 @@ there because skipping it has produced a confident number that measured nothing.
 
 - The `autoaw` MCP tools must be available (`validate_awf`, `import_workflow`,
   `start_optimization`, `get_status`, `get_result`). If they are missing, send
-  the user to https://autoaw.app/connect. That page has the endpoint, a token
-  to export as `AUTOAW_TOKEN`, and the `claude mcp add` command. The token
-  expires hourly. A 401 means the user should refresh it there.
+  the user to https://autoaw.app/connect. There they create an API key (shown
+  once), export it as `AUTOAW_API_KEY` before starting the agent, and copy the
+  `claude mcp add` command or the OpenCode config. A 401 means the key is
+  missing, mistyped or revoked; a 403 on import means the account is in
+  preview and runs aren't enabled yet.
 - Keep all working state in `.autoaw/` at the repo root: `workflow.awf` and
   `state.json`. Suggest adding `.autoaw/` to `.gitignore`, because the eval rows
   may be sensitive.

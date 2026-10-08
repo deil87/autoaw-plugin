@@ -20,11 +20,11 @@ settings, your evaluation rows and file hashes.
 /plugin install autoaw@autoaw
 ```
 
-Then get your credentials at https://autoaw.app/connect and export them before
-starting Claude Code:
+Then create an API key at https://autoaw.app/connect (it is shown once) and
+export it before starting Claude Code:
 
 ```
-export AUTOAW_TOKEN=...
+export AUTOAW_API_KEY=...
 ```
 
 Ask Claude: *"optimise the agent workflow in this repo with AutoAW"*.
@@ -42,7 +42,7 @@ server to `opencode.json`:
       "type": "remote",
       "url": "https://5oahxb0xj7.execute-api.eu-central-1.amazonaws.com/mcp",
       "oauth": false,
-      "headers": { "Authorization": "Bearer {env:AUTOAW_TOKEN}" }
+      "headers": { "Authorization": "Bearer {env:AUTOAW_API_KEY}" }
     }
   }
 }

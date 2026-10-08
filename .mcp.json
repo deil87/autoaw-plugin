@@ -3,7 +3,7 @@
     "autoaw": {
       "type": "http",
       "url": "https://5oahxb0xj7.execute-api.eu-central-1.amazonaws.com/mcp",
-      "headers": { "Authorization": "Bearer ${AUTOAW_TOKEN}" }
+      "headers": { "Authorization": "Bearer ${AUTOAW_API_KEY}" }
     }
   }
 }
