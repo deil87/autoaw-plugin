@@ -1,0 +1,15 @@
+{
+  "name": "autoaw",
+  "description": "AutoAW plugins: optimise the agent workflows already in your codebase.",
+  "owner": {
+    "name": "AutoAW",
+    "url": "https://autoaw.app"
+  },
+  "plugins": [
+    {
+      "name": "autoaw",
+      "source": "./",
+      "description": "Optimise an existing agent workflow (CrewAI, LangGraph, OpenAI Agents SDK, \u2026) with AutoAW and apply the measured changes back to your code."
+    }
+  ]
+}

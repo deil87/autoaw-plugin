@@ -1,0 +1,8 @@
+{
+  "name": "autoaw",
+  "version": "0.1.0",
+  "description": "Optimise the agent workflow already in your code with AutoAW: extract it to an .awf file, import it over MCP, and apply the measured changes back at the exact lines they came from.",
+  "author": { "name": "AutoAW", "url": "https://autoaw.app" },
+  "homepage": "https://autoaw.app/connect",
+  "keywords": ["agents", "crewai", "langgraph", "openai-agents", "optimization", "mcp", "evaluation"]
+}
