@@ -71,7 +71,10 @@ but it carries nothing tunable, so it cannot be optimised.
 ## `tunable` and `anchors`
 
 A path is written `agents.<agent id>.<field>`. The field is one of `model`,
-`temperature`, `system_prompt` or `few_shot`.
+`temperature`, `system_prompt` or `few_shot`. One more path, `workflow.structure`,
+records where the agents are wired together. Structure is always searched; the
+path only gives a confirmed "remove this agent" result a location, so anchor it
+with kind `graph_wiring`.
 
 | `kind` | when |
 |---|---|
@@ -81,6 +84,7 @@ A path is written `agents.<agent id>.<field>`. The field is one of `model`,
 | `env_var` | the value comes from an environment variable. Set `locator` to the variable name. The change then goes to wherever the variable is defined, such as `.env.example`, deploy config or docs. |
 | `file` | the whole file is the prompt, e.g. `prompts/analyst.md` |
 | `insertion_point` | `few_shot` only: the last line of the text the demos should follow, such as the end of a task description or the line that builds the message list |
+| `graph_wiring` | `workflow.structure` only: the lines that connect the agents, such as a LangGraph builder's `add_node`/`add_edge` calls, a CrewAI crew's `tasks=[...]`, or the sequence of calls in plain SDK code. Set `symbol` to the enclosing function. |
 
 Line numbers are 1-based and inclusive. For a multi-line value, cover every
 line of it. For an `insertion_point`, point at the last line of the text the

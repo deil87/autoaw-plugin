@@ -70,6 +70,16 @@ different configuration.
   was measured. Pass it on to the user.
 - `to: "none"`: remove the demonstrations at the insertion point.
 
+**`workflow.structure`** (manual). `op` is `remove_agent`, `agent` names the
+step, and `rewire` says what its neighbour now reads: `{from, to}`, where `INPUT`
+is the workflow input and `OUTPUT` its result. Read `instruction`, show the user
+the edit at the `graph_wiring` anchor, and wait for a yes. Then remove the
+step's call, node or task, and connect `from` to `to` in the framework's idiom:
+one `add_edge` in LangGraph, one fewer task in a CrewAI list, one fewer call in
+the sequence. Keep any non-agent step that sat between them. Leave the removed
+agent's prompt and model in place unless the user asks for them to be deleted.
+Without an anchor, find the wiring by the agent's name and say that you did.
+
 ## After
 
 Run the tests. If there are none, or the framework is not installed here,

@@ -1,6 +1,6 @@
 ---
 name: optimize-workflow
-description: Optimise an agent workflow that already exists in this codebase (CrewAI, LangGraph, LangChain, OpenAI Agents SDK, AutoGen, LlamaIndex, PydanticAI, smolagents, DSPy, or plain SDK calls) with AutoAW. Extracts the workflow into an .awf file with anchors to the exact lines each prompt/model lives on, builds an eval set, imports it over the AutoAW MCP server, runs a smoke test then the optimisation, and applies the measured changes back to the code. Use when the user wants to improve, tune, benchmark or cut the cost of their existing agents/crew/graph with AutoAW, or asks to apply an AutoAW result.
+description: Optimise an agent workflow that already exists in this codebase (CrewAI, LangGraph, LangChain, OpenAI Agents SDK, AutoGen, LlamaIndex, PydanticAI, smolagents, DSPy, or plain SDK calls) with AutoAW, or have AutoAW build one from a task description when there is none (greenfield). For an existing workflow it extracts an .awf file with anchors to the exact lines each prompt/model lives on, imports it over the AutoAW MCP server, smoke-tests, optimises and applies the measured changes back to the code. For greenfield, AutoAW composes the workflow from its own unit catalog and tunes it. Use when the user wants to improve, tune, benchmark or cut the cost of their agents/crew/graph, wants AutoAW to design a workflow for a task, or asks to apply an AutoAW result.
 ---
 
 # Optimise an existing workflow with AutoAW
@@ -27,6 +27,16 @@ there because skipping it has produced a confident number that measured nothing.
   may be sensitive.
 - If `.autoaw/state.json` already has an `experiment_id`, the user may be
   resuming. Ask before starting a new import.
+
+## Which path?
+
+- **The repo already has the workflow** (agents, a crew, a graph, chained LLM
+  calls): follow steps 1–9 below.
+- **There is no workflow yet**, or the user wants AutoAW to design one: use
+  [references/greenfield.md](references/greenfield.md). AutoAW composes the
+  workflow itself from its unit catalog. **Do not draft a workflow, prompts or
+  agents yourself** for this path. The composition is what AutoAW is measuring,
+  and a workflow you drafted would make the search tune your guess.
 
 ## 1. Detect the framework
 
@@ -73,6 +83,13 @@ format is in [references/awf-1.1.md](references/awf-1.1.md). Rules:
   `line_start`/`line_end`, `kind`, plus `symbol` or `locator`. Get line numbers
   from the file itself, never from memory:
   `python <skill-dir>/scripts/awf.py find <file> "<text>"` prints them.
+- **Anchor the wiring too.** AutoAW always tests whether each agent earns its
+  place by running the workflow without it, and reports a confirmed removal as a
+  `workflow.structure` change. Add `workflow.structure` to `tunable` with a
+  `graph_wiring` anchor on the lines that connect the agents: LangGraph
+  `add_node`/`add_edge` in the graph builder, a CrewAI crew's `tasks=[...]`, or
+  the sequence of calls in plain SDK code. Without it a removal comes back with
+  no location.
 - When a prompt is assembled from several pieces (CrewAI role + goal + backstory
   + task), put the assembled text in `system_prompt`. Anchor it at the piece
   where an appended instruction belongs; the guide says which.
@@ -90,16 +107,20 @@ for example "classifier: model, prompt, few-shot examples". The fields are:
 
 - `model`: AutoAW tries the models listed in `eval.candidate_models`. Ask
   which ones the user can actually deploy.
-- `system_prompt`: AutoAW may **append** a reasoning or instruction text. It
-  never rewrites the prompt.
-- `few_shot`: AutoAW may add 2 or 4 demonstrations drawn from the eval rows.
+- `system_prompt`: AutoAW reads the rows the workflow gets wrong and may
+  **append a rule** to the one agent that lost them (for example "a name match
+  with a different date of birth is a false positive"). It never rewrites the
+  prompt.
 - `temperature`: only if the user's provider honours it. GPT-5-class and other
-  "temperature fixed" models ignore it.
+  "temperature fixed" models ignore it. It is one value for all agents.
+- `few_shot`: not searched by the current campaign. Leave it out.
 
-Leave a field out when the user would not accept it changing. A field left out
-is never changed. On flat pipelines the search sets one value for **all** agents
-at once, so a field opened on one agent and not another comes back as
-"partial". Open a field on every agent or on none.
+Structure needs no field: AutoAW always measures each agent's contribution by
+leaving it out, and a removal is only ever reported, never applied without the
+user. Leave a field out when the user would not accept it changing. A field left
+out is never changed. Model is searched per agent when the budget allows and as
+one model for all agents otherwise, so open `model` on every agent or on none,
+or a winner can come back as "partial".
 
 ## 4. Build the eval set
 
@@ -161,9 +182,22 @@ a yes.** Then:
 
 ## 7. The real run
 
-Agree a budget with the user: the default is 24 trials and $5. A larger grid
-cannot use more trials than it has cells. Then call `import_workflow` with
-`smoke: false`, followed by `start_optimization`. Save `experiment_id` to
+Agree a budget with the user: the default is 24 trials and $5. The real run is a
+campaign of phases, and the trial budget is split evenly between those that
+search:
+
+1. **Shape**: each agent switched off in turn (the input passes straight to the
+   next agent). Always runs when there are two or more agents.
+2. **Config**: `model` and `temperature`, where opened.
+3. **Diagnosis → Repair**: when `system_prompt` is opened, a model reads the
+   failing rows and writes rules for the agent that lost them; Repair measures
+   each rule.
+
+Each searching phase holds 40% of the rows out and re-runs its winner and the
+workflow without each change three times on them, uncached. Those repeats cost
+model calls on top of the trials, so the dollar cap is what bounds the run.
+`get_status` lists `phases_done` against `phases_planned`. Then call
+`import_workflow` with `smoke: false`, followed by `start_optimization`. Save `experiment_id` to
 `.autoaw/state.json`. Runs take minutes to an hour. Tell the user they can leave
 and resume later with "apply my AutoAW result".
 
@@ -172,19 +206,21 @@ and resume later with "apply my AutoAW result".
 `get_result` returns a `verdict`, `evidence`, `changes`, `withheld` and an
 `apply_prompt`. Report the verdict in the evidence's own terms:
 
-- `improved`: give the delta as "quality X → Y, about R of N rows"
-  (`rows_delta`), plus the cost side (`cost_ratio`: the winner's cost per run
-  as a multiple of today's). Add that it is a single-run difference with no
-  noise floor measured, so a delta of a row or two is unproven. Never round it
-  into a claim it does not support. The winner bundles every change it
-  made, and the run does not say which one carried it. If a `recipe` change
-  (new selection code) rides along with a model change, ask the user whether
-  to apply the cheap edits first.
-- `partial`: the winner also changed fields the user did not open. Applying
-  only the opened changes produces a configuration nobody measured. Offer to
-  re-run with those fields opened instead.
+- `improved`: every entry in `changes` was **confirmed**: re-run against the
+  workflow without it on held-out rows, with an effect larger than the spread
+  of the repeats. Report each change with its own `evidence` (phase, effect,
+  floor, repeats, held-out rows). Never add the effects up into one claim:
+  each was measured against the configuration of its own phase.
+- `unconfirmed`: differences were measured, but none held up beyond the noise
+  of repeating the same configuration. Nothing to apply. Show what was tried
+  from `withheld`, with its effect and floor, so the user sees why. An older
+  single-pass experiment also reads `unconfirmed`: its winner was never
+  repeated, so re-import to run a campaign.
+- `partial`: a confirmed winner also changed fields the user did not open.
+  Applying only the opened changes produces a configuration nobody measured.
+  Offer to re-run with those fields opened instead.
 - `control_not_beaten` / `only_withheld`: nothing to apply. Say so plainly.
-  That is a real result: their workflow is already at the top of this grid.
+  That is a real result: their workflow already holds up.
 
 If `provisional` is set, the run is still going. Do not apply yet.
 
@@ -199,6 +235,9 @@ Follow [references/apply.md](references/apply.md). For each change:
    argument, or string literal.
 3. Map AutoAW model ids to the user's provider id. The `@high` suffix means
    reasoning effort; it is not part of the id.
+4. A `workflow.structure` change removes an agent. Show the user the rewiring
+   (`rewire.from` → `rewire.to`) and **get a yes before deleting a step**: a
+   removal is the change most likely to matter outside the eval set.
 
 Then run the project's tests and show the diff. Do not commit unless the user
 asks. Record in `.autoaw/state.json` which experiment the edits came from.

@@ -23,10 +23,15 @@ from typing import Any
 AWF_KIND = "AgenticWorkflow"
 SUPPORTED_VERSIONS = ("1.0", "1.1")
 
-# What a v1 delta can carry back into a client's code. Each one maps to engine
-# axes in ``experiment.AXES_FOR_FIELD``. ``system_prompt`` is tunable as TEXT
-# appended by the predictor/instruction axes; the prompt is not rewritten.
+# What a v1 delta can carry back into a client's code. Each one opens a phase of
+# the campaign in ``experiment.build_body``. ``system_prompt`` is tunable as TEXT
+# APPENDED (a diagnosed rule for one step); the client's prompt is not rewritten.
 TUNABLE_FIELDS = ("model", "temperature", "system_prompt", "few_shot")
+
+# Which agents run, and in what order. Always SEARCHED (a step can be measured
+# without the client's say-so); listing it is how a document records WHERE the
+# wiring lives, so a "remove this step" result comes back with a location.
+STRUCTURE_PATH = "workflow.structure"
 
 # Frameworks the skill has extraction guidance for. Anything else must say
 # ``custom`` — an unknown string would reach the apply step with no guide.
@@ -42,6 +47,7 @@ ANCHOR_KINDS = (
     "env_var",           # the value is read from an environment variable
     "file",              # the whole file is the value (prompts/analyst.md)
     "insertion_point",   # few_shot: where demonstrations would be inserted
+    "graph_wiring",      # workflow.structure: the lines that connect the agents
 )
 
 # Evaluators a client file may name. ``function`` is refused because its
@@ -209,6 +215,9 @@ def _validate_tunable(tun: Any, agent_ids: set[str], errors: list[str]) -> list[
         errors.append(f"tunable lists {len(tun)} paths; the limit is {MAX_TUNABLE}")
     out: list[str] = []
     for path in tun:
+        if path == STRUCTURE_PATH:
+            out.append(path)
+            continue
         parts = split_path(path)
         if parts is None:
             errors.append(f"tunable path {path!r} must read agents.<agent_id>.<field>")
@@ -246,6 +255,9 @@ def _validate_anchors(anchors: Any, tunable: list[str], errors: list[str], warni
             errors.append(f"anchor {path!r}: line_end must be an integer >= line_start")
         if a.get("kind") not in ANCHOR_KINDS:
             errors.append(f"anchor {path!r}: kind {a.get('kind')!r} not one of {list(ANCHOR_KINDS)}")
+        elif (a.get("kind") == "graph_wiring") != (path == STRUCTURE_PATH):
+            errors.append(f"anchor {path!r}: graph_wiring is the kind for {STRUCTURE_PATH} "
+                          "and only for it")
     for path in tunable:
         if path not in anchors:
             # Still measurable; the change comes back without a location and the
